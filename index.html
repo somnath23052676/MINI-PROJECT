@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ISL + Emotion Detector</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0c10;
+    --surface: #111318;
+    --surface2: #181c24;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --accent: #00e5ff;
+    --accent2: #7c3aed;
+    --accent3: #10b981;
+    --text: #f0f4ff;
+    --text2: #8892a4;
+    --text3: #4a5568;
+    --danger: #ef4444;
+    --warn: #f59e0b;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+    --glow: 0 0 30px rgba(0,229,255,0.15);
+
+    --happy: #fbbf24;
+    --sad: #60a5fa;
+    --angry: #f87171;
+    --surprised: #a78bfa;
+    --fearful: #34d399;
+    --disgusted: #fb923c;
+    --neutral: #94a3b8;
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.025) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 1300px;
+    margin: 0 auto;
+    padding: 24px 20px 60px;
+  }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 0 28px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .logo { display: flex; align-items: center; gap: 14px; }
+
+  .logo-icon {
+    width: 48px; height: 48px;
+    background: linear-gradient(135deg, rgba(0,229,255,0.12), rgba(124,58,237,0.12));
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+
+  .logo-text h1 {
+    font-family: var(--mono);
+    font-size: 17px; font-weight: 700;
+    color: var(--text); letter-spacing: -0.5px;
+  }
+
+  .logo-text p {
+    font-size: 11px; color: var(--text2);
+    font-weight: 300; letter-spacing: 0.8px;
+    text-transform: uppercase; margin-top: 2px;
+  }
+
+  .header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+  .status-pill {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    font-size: 12px; font-family: var(--mono);
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text3);
+    transition: background 0.3s;
+  }
+  .dot.active { background: var(--accent3); box-shadow: 0 0 8px var(--accent3); animation: pulse 2s infinite; }
+  .dot.loading { background: var(--warn); animation: pulse 0.8s infinite; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  #fps-badge {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--text3); padding: 4px 10px;
+    background: var(--surface2); border-radius: 4px;
+  }
+
+  /* MAIN LAYOUT */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 960px) { .main-grid { grid-template-columns: 1fr; } }
+
+  /* VIDEO PANEL */
+  .video-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+  }
+
+  .video-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+
+  .panel-label {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--text2); text-transform: uppercase; letter-spacing: 1.5px;
+  }
+
+  .cam-controls { display: flex; gap: 8px; }
+
+  .btn {
+    padding: 8px 18px; border-radius: 8px;
+    font-size: 13px; font-family: var(--sans); font-weight: 500;
+    cursor: pointer; transition: all 0.2s;
+    border: 1px solid var(--border2);
+    background: var(--surface2); color: var(--text);
+  }
+  .btn:hover { background: var(--border); transform: translateY(-1px); }
+
+  .btn-primary {
+    background: var(--accent); color: #000;
+    border-color: var(--accent); font-weight: 600;
+  }
+  .btn-primary:hover { background: #33ecff; box-shadow: var(--glow); }
+
+  .btn-danger {
+    background: transparent; color: var(--danger); border-color: var(--danger);
+  }
+  .btn-danger:hover { background: rgba(239,68,68,0.08); }
+
+  .video-wrap {
+    position: relative; aspect-ratio: 4/3;
+    background: #000; overflow: hidden;
+  }
+
+  #video {
+    width: 100%; height: 100%;
+    object-fit: cover; transform: scaleX(-1); display: block;
+  }
+
+  #canvas {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    transform: scaleX(-1);
+  }
+
+  .placeholder {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 16px; background: var(--surface);
+  }
+  .placeholder-icon { font-size: 60px; opacity: 0.25; }
+  .placeholder p { color: var(--text2); font-size: 14px; text-align: center; max-width: 240px; line-height: 1.6; }
+
+  /* SCAN LINE */
+  .scan-line {
+    position: absolute; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    animation: scan 3s linear infinite; opacity: 0; pointer-events: none;
+  }
+  .scan-line.active { opacity: 0.5; }
+  @keyframes scan { 0%{top:0%} 100%{top:100%} }
+
+  /* VIDEO OVERLAYS */
+  .detection-overlay {
+    position: absolute; bottom: 12px; left: 12px; right: 12px;
+    pointer-events: none;
+    display: flex; align-items: flex-end; justify-content: space-between; gap: 8px;
+  }
+
+  .detected-letter {
+    display: inline-flex; align-items: center; gap: 10px;
+    background: rgba(10,12,16,0.88);
+    border: 1px solid var(--accent);
+    border-radius: 12px; padding: 9px 16px;
+    backdrop-filter: blur(8px);
+  }
+
+  .letter-big {
+    font-family: var(--mono); font-size: 38px; font-weight: 700;
+    color: var(--accent); line-height: 1; min-width: 38px; text-align: center;
+  }
+
+  .letter-info { display: flex; flex-direction: column; }
+  .letter-name { font-size: 14px; font-weight: 600; color: var(--text); }
+
+  .conf-bar-wrap { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+  .conf-bar { width: 70px; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .conf-fill { height: 100%; background: var(--accent3); border-radius: 2px; transition: width 0.3s; }
+  .conf-pct { font-family: var(--mono); font-size: 10px; color: var(--text2); }
+
+  /* EMOTION BADGE ON VIDEO */
+  .emotion-badge-video {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(10,12,16,0.88);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 12px; padding: 9px 14px;
+    backdrop-filter: blur(8px);
+    min-width: 140px;
+  }
+
+  .emotion-emoji { font-size: 24px; line-height: 1; }
+  .emotion-badge-info { display: flex; flex-direction: column; }
+  .emotion-badge-name { font-size: 13px; font-weight: 600; color: var(--text); text-transform: capitalize; }
+  .emotion-badge-conf { font-family: var(--mono); font-size: 10px; color: var(--text2); }
+
+  .no-hand-msg {
+    position: absolute; top: 12px; left: 12px;
+    background: rgba(10,12,16,0.8);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 10px; font-size: 11px;
+    font-family: var(--mono); color: var(--text3); display: none;
+  }
+  .no-hand-msg.show { display: block; }
+
+  .face-box {
+    position: absolute;
+    border: 2px solid var(--happy);
+    border-radius: 4px;
+    pointer-events: none;
+    transition: all 0.1s;
+  }
+
+  /* VIDEO footer */
+  .video-footer {
+    padding: 12px 20px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  }
+  .tip { font-size: 11px; color: var(--text3); }
+
+  /* SIDE PANEL */
+  .side-panel { display: flex; flex-direction: column; gap: 16px; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; overflow: hidden;
+  }
+
+  .card-header {
+    padding: 13px 18px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+
+  .card-title {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--text2); text-transform: uppercase; letter-spacing: 1.5px;
+  }
+
+  /* ---- EMOTION CARD ---- */
+  .emotion-main {
+    padding: 20px 18px;
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+
+  .emotion-face {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 40px;
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    transition: all 0.4s;
+    position: relative;
+  }
+
+  .emotion-face.detected {
+    border-color: var(--current-emotion-color, var(--accent));
+    background: var(--current-emotion-bg, var(--surface2));
+    box-shadow: 0 0 20px var(--current-emotion-glow, transparent);
+  }
+
+  .emotion-label {
+    font-size: 22px; font-weight: 600;
+    color: var(--text); text-transform: capitalize;
+    letter-spacing: -0.5px;
+  }
+
+  .emotion-label.none { color: var(--text3); font-size: 16px; }
+
+  .emotion-desc {
+    font-size: 12px; color: var(--text2);
+    text-align: center; line-height: 1.5;
+    max-width: 240px;
+  }
+
+  /* Emotion bars */
+  .emotion-bars { padding: 0 18px 16px; display: flex; flex-direction: column; gap: 7px; }
+
+  .emo-bar-row { display: flex; align-items: center; gap: 10px; }
+  .emo-icon { font-size: 14px; width: 20px; text-align: center; }
+  .emo-name { font-size: 12px; color: var(--text2); width: 70px; text-transform: capitalize; }
+  .emo-track { flex: 1; height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+  .emo-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+  .emo-pct { font-family: var(--mono); font-size: 10px; color: var(--text3); width: 28px; text-align: right; }
+
+  /* ---- SIGN DETECTION CARD ---- */
+  .letter-display { padding: 20px 18px; text-align: center; }
+
+  .big-letter {
+    font-family: var(--mono); font-size: 88px; font-weight: 700;
+    color: var(--accent); line-height: 1;
+    text-shadow: 0 0 40px rgba(0,229,255,0.35);
+    transition: all 0.2s; min-height: 92px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .big-letter.none { color: var(--text3); font-size: 44px; }
+
+  .word-display {
+    font-family: var(--mono); font-size: 18px; color: var(--text);
+    margin-top: 6px; letter-spacing: 3px;
+    min-height: 28px; word-break: break-all;
+  }
+
+  .word-actions { display: flex; gap: 8px; justify-content: center; margin-top: 14px; }
+
+  .btn-sm {
+    padding: 6px 12px; font-size: 11px; border-radius: 6px;
+    border: 1px solid var(--border2); background: var(--surface2);
+    color: var(--text); cursor: pointer; font-family: var(--sans);
+    font-weight: 500; transition: all 0.2s;
+  }
+  .btn-sm:hover { background: var(--border); }
+
+  /* TOP PREDS */
+  .confidence-grid { padding: 14px 18px; display: flex; flex-direction: column; gap: 7px; }
+  .conf-row { display: flex; align-items: center; gap: 8px; }
+  .conf-ltr { font-family: var(--mono); font-size: 13px; font-weight: 700; width: 18px; color: var(--text2); }
+  .conf-track { flex: 1; height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
+  .conf-track-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+  .conf-val { font-family: var(--mono); font-size: 10px; color: var(--text2); width: 28px; text-align: right; }
+
+  /* HISTORY */
+  .history-area {
+    padding: 14px 18px; min-height: 70px;
+    display: flex; flex-wrap: wrap; gap: 5px; align-content: flex-start;
+  }
+  .hist-chip {
+    display: inline-flex; align-items: center;
+    padding: 3px 9px; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 5px;
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    color: var(--text); animation: fadeIn 0.2s ease;
+  }
+  .hist-chip.latest { border-color: var(--accent); color: var(--accent); background: rgba(0,229,255,0.07); }
+
+  @keyframes fadeIn { from{opacity:0;transform:scale(0.7)} to{opacity:1;transform:scale(1)} }
+
+  /* REF GRID */
+  .ref-grid {
+    padding: 12px 18px 16px;
+    display: grid; grid-template-columns: repeat(6,1fr); gap: 5px;
+  }
+  .ref-cell {
+    aspect-ratio: 1; background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+  }
+  .ref-cell.detected { background: rgba(0,229,255,0.1); border-color: var(--accent); }
+  .ref-l { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--text3); }
+  .ref-cell.detected .ref-l { color: var(--accent); }
+
+  /* LOADING OVERLAY */
+  #load-overlay {
+    position: fixed; inset: 0; background: var(--bg);
+    z-index: 100; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 20px;
+    transition: opacity 0.6s;
+  }
+  #load-overlay.hidden { opacity: 0; pointer-events: none; }
+
+  .loader-logo { font-family: var(--mono); font-size: 26px; font-weight: 700; color: var(--accent); }
+  .loader-sub { font-size: 13px; color: var(--text2); font-weight: 300; }
+
+  .progress-bar { width: 280px; height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.4s; box-shadow: 0 0 10px var(--accent); }
+
+  #load-msg { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+
+  .load-modules { display: flex; gap: 16px; margin-top: 8px; }
+  .load-module {
+    display: flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 11px; color: var(--text3);
+  }
+  .load-module-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text3); }
+  .load-module-dot.done { background: var(--accent3); }
+  .load-module-dot.loading { background: var(--warn); animation: pulse 0.7s infinite; }
+
+  /* Emotion color map (CSS-driven) */
+  .emo-happy .emo-fill { background: var(--happy); }
+  .emo-sad .emo-fill { background: var(--sad); }
+  .emo-angry .emo-fill { background: var(--angry); }
+  .emo-surprised .emo-fill { background: var(--surprised); }
+  .emo-fearful .emo-fill { background: var(--fearful); }
+  .emo-disgusted .emo-fill { background: var(--disgusted); }
+  .emo-neutral .emo-fill { background: var(--neutral); }
+
+  .combined-badge {
+    position: absolute; top: 12px; right: 12px;
+    display: flex; flex-direction: column; gap: 6px;
+    pointer-events: none;
+  }
+
+  .mode-pill {
+    display: flex; align-items: center; gap: 5px;
+    padding: 4px 10px;
+    background: rgba(10,12,16,0.8);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-family: var(--mono); font-size: 10px;
+    color: var(--text2);
+    backdrop-filter: blur(6px);
+  }
+  .mode-pill-dot { width: 5px; height: 5px; border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<!-- LOADING OVERLAY -->
+<div id="load-overlay">
+  <div class="loader-logo">✋😊 ISL + Emotion AI</div>
+  <div class="loader-sub">Loading pre-trained models...</div>
+  <div class="progress-bar"><div class="progress-fill" id="prog" style="width:0%"></div></div>
+  <div class="load-modules">
+    <div class="load-module"><div class="load-module-dot loading" id="mod-hands"></div><span>Hand Model</span></div>
+    <div class="load-module"><div class="load-module-dot" id="mod-face"></div><span>Face Model</span></div>
+    <div class="load-module"><div class="load-module-dot" id="mod-emotion"></div><span>Emotion Model</span></div>
+  </div>
+  <div id="load-msg">Initializing TensorFlow...</div>
+</div>
+
+<div class="app">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">✋</div>
+      <div class="logo-text">
+        <h1>ISL + Emotion Detector</h1>
+        <p>Indian Sign Language · Facial Emotion · Real-time AI</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div id="fps-badge">— fps</div>
+      <div class="status-pill">
+        <div class="dot" id="status-dot"></div>
+        <span id="status-txt" style="font-size:12px;">Initializing</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="main-grid">
+
+    <!-- VIDEO PANEL -->
+    <div class="video-panel">
+      <div class="video-header">
+        <span class="panel-label">Live Camera Feed</span>
+        <div class="cam-controls">
+          <button class="btn btn-primary" id="start-btn" onclick="startCamera()">▶ Start Camera</button>
+          <button class="btn btn-danger" id="stop-btn" style="display:none" onclick="stopCamera()">■ Stop</button>
+        </div>
+      </div>
+
+      <div class="video-wrap">
+        <div class="placeholder" id="placeholder">
+          <div class="placeholder-icon">📷</div>
+          <p>Click <strong>Start Camera</strong> to detect ISL signs and facial emotions simultaneously.</p>
+          <p style="font-size:11px;color:var(--text3);margin-top:4px;">Everything runs locally — no data leaves your device.</p>
+        </div>
+        <video id="video" playsinline autoplay muted style="display:none"></video>
+        <canvas id="canvas" style="display:none"></canvas>
+        <div class="scan-line" id="scan-line"></div>
+        <div class="no-hand-msg" id="no-hand">No hand detected</div>
+
+        <!-- Top-right mode pills -->
+        <div class="combined-badge" id="combined-badge" style="display:none">
+          <div class="mode-pill"><div class="mode-pill-dot" id="hand-mode-dot" style="background:var(--accent)"></div>Hand Tracking</div>
+          <div class="mode-pill"><div class="mode-pill-dot" id="face-mode-dot" style="background:var(--text3)"></div>Face Detection</div>
+        </div>
+
+        <!-- Bottom overlays -->
+        <div class="detection-overlay" id="det-overlay" style="display:none">
+          <!-- ISL letter badge -->
+          <div class="detected-letter">
+            <div class="letter-big" id="ov-letter">—</div>
+            <div class="letter-info">
+              <div class="letter-name" id="ov-name">Waiting...</div>
+              <div class="conf-bar-wrap">
+                <div class="conf-bar"><div class="conf-fill" id="ov-conf-fill" style="width:0%"></div></div>
+                <div class="conf-pct" id="ov-conf-pct">0%</div>
+              </div>
+            </div>
+          </div>
+          <!-- Emotion badge -->
+          <div class="emotion-badge-video" id="emo-badge-video">
+            <div class="emotion-emoji" id="ov-emo-emoji">😐</div>
+            <div class="emotion-badge-info">
+              <div class="emotion-badge-name" id="ov-emo-name">neutral</div>
+              <div class="emotion-badge-conf" id="ov-emo-conf">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="video-footer">
+        <div class="tip">💡 Show ISL hand signs to camera</div>
+        <div class="tip">·</div>
+        <div class="tip">😊 Face the camera for emotion detection</div>
+        <div class="tip">·</div>
+        <div class="tip">Both work simultaneously</div>
+      </div>
+    </div>
+
+    <!-- SIDE PANEL -->
+    <div class="side-panel">
+
+      <!-- EMOTION CARD -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Facial Emotion</span>
+          <span style="font-size:11px;color:var(--text3);font-family:var(--mono)" id="face-det-status">No face</span>
+        </div>
+        <div class="emotion-main">
+          <div class="emotion-face" id="emotion-face">😐</div>
+          <div class="emotion-label none" id="emotion-label">No face detected</div>
+          <div class="emotion-desc" id="emotion-desc">Face the camera to detect your emotion in real-time.</div>
+        </div>
+        <div class="emotion-bars" id="emotion-bars">
+          <!-- Filled by JS -->
+        </div>
+      </div>
+
+      <!-- ISL CURRENT DETECTION -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Sign Detection</span>
+          <span style="font-size:11px;color:var(--accent3);font-family:var(--mono)" id="hand-side">—</span>
+        </div>
+        <div class="letter-display">
+          <div class="big-letter none" id="main-letter">—</div>
+          <div class="word-display" id="word-built"></div>
+          <div class="word-actions">
+            <button class="btn-sm" onclick="addSpace()">+ Space</button>
+            <button class="btn-sm" onclick="deleteLast()">⌫ Delete</button>
+            <button class="btn-sm" onclick="clearWord()">✕ Clear</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TOP PREDICTIONS -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">Top Sign Predictions</span></div>
+        <div class="confidence-grid" id="top-preds">
+          <div style="color:var(--text3);font-size:12px;text-align:center;padding:6px 0;">Start camera to see predictions</div>
+        </div>
+      </div>
+
+      <!-- HISTORY -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Sign History</span>
+          <button class="btn-sm" onclick="clearHistory()">Clear</button>
+        </div>
+        <div class="history-area" id="history">
+          <div style="color:var(--text3);font-size:12px;">Signs appear here...</div>
+        </div>
+      </div>
+
+      <!-- REFERENCE -->
+      <div class="card">
+        <div class="card-header"><span class="card-title">ISL Alphabet</span></div>
+        <div class="ref-grid" id="ref-grid"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- MediaPipe -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<!-- face-api.js (includes pre-trained emotion detection models) -->
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
+<script>
+// ==========================================
+// EMOTION CONFIG
+// ==========================================
+const EMOTION_CONFIG = {
+  happy:     { emoji: '😄', color: '#fbbf24', bg: 'rgba(251,191,36,0.1)',  glow: 'rgba(251,191,36,0.3)',  desc: 'You look happy! Great positive energy.' },
+  sad:       { emoji: '😢', color: '#60a5fa', bg: 'rgba(96,165,250,0.1)',  glow: 'rgba(96,165,250,0.3)',  desc: 'Feeling sad? That\'s okay, emotions are valid.' },
+  angry:     { emoji: '😠', color: '#f87171', bg: 'rgba(248,113,113,0.1)', glow: 'rgba(248,113,113,0.3)', desc: 'Frustration detected. Take a deep breath!' },
+  surprised: { emoji: '😲', color: '#a78bfa', bg: 'rgba(167,139,250,0.1)', glow: 'rgba(167,139,250,0.3)', desc: 'You seem surprised! Something unexpected?' },
+  fearful:   { emoji: '😨', color: '#34d399', bg: 'rgba(52,211,153,0.1)',  glow: 'rgba(52,211,153,0.3)',  desc: 'A hint of fear or concern detected.' },
+  disgusted: { emoji: '🤢', color: '#fb923c', bg: 'rgba(251,146,60,0.1)',  glow: 'rgba(251,146,60,0.3)',  desc: 'Disgust expression detected on your face.' },
+  neutral:   { emoji: '😐', color: '#94a3b8', bg: 'rgba(148,163,184,0.1)', glow: 'rgba(148,163,184,0.2)', desc: 'Neutral expression — calm and composed.' }
+};
+
+const EMOTIONS = Object.keys(EMOTION_CONFIG);
+
+// Build emotion bars
+function buildEmotionBars() {
+  const container = document.getElementById('emotion-bars');
+  container.innerHTML = '';
+  EMOTIONS.forEach(emo => {
+    const cfg = EMOTION_CONFIG[emo];
+    const row = document.createElement('div');
+    row.className = `emo-bar-row emo-${emo}`;
+    row.id = `emo-row-${emo}`;
+    row.innerHTML = `
+      <span class="emo-icon">${cfg.emoji}</span>
+      <span class="emo-name">${emo}</span>
+      <div class="emo-track"><div class="emo-fill" id="emo-fill-${emo}" style="width:0%;background:${cfg.color}"></div></div>
+      <span class="emo-pct" id="emo-pct-${emo}">0%</span>
+    `;
+    container.appendChild(row);
+  });
+}
+
+buildEmotionBars();
+
+// ==========================================
+// ISL CONFIG
+// ==========================================
+const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+const FINGER_TIPS = [4, 8, 12, 16, 20];
+const FINGER_PIPS = [3, 6, 10, 14, 18];
+const FINGER_MCPS = [2, 5, 9, 13, 17];
+
+// Build reference grid
+const refGrid = document.getElementById('ref-grid');
+LETTERS.forEach(l => {
+  const cell = document.createElement('div');
+  cell.className = 'ref-cell'; cell.id = 'ref-' + l;
+  cell.innerHTML = `<span class="ref-l">${l}</span>`;
+  refGrid.appendChild(cell);
+});
+
+// ==========================================
+// HAND LANDMARK HELPERS
+// ==========================================
+function dist(a, b) {
+  return Math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2 + (a.z-b.z)**2);
+}
+
+function isFingerUp(lm, f) {
+  if (f === 0) return lm[4].x < lm[3].x;
+  return lm[FINGER_TIPS[f]].y < lm[FINGER_PIPS[f]].y;
+}
+
+function isFingerCurled(lm, f) {
+  if (f === 0) return lm[4].x > lm[3].x;
+  return lm[FINGER_TIPS[f]].y > lm[FINGER_MCPS[f]].y;
+}
+
+// ==========================================
+// ISL CLASSIFIER
+// ==========================================
+function classifyISL(lm) {
+  // ISL (Indian Sign Language) Alphabet Classifier
+  // Based on published ISL hand-shape descriptions for A–Z.
+  // Landmark indices follow MediaPipe 21-point hand model.
+  const scores = {}; LETTERS.forEach(l => scores[l] = 0);
+
+  const thumbUp   = isFingerUp(lm, 0);
+  const indexUp   = isFingerUp(lm, 1);
+  const middleUp  = isFingerUp(lm, 2);
+  const ringUp    = isFingerUp(lm, 3);
+  const pinkyUp   = isFingerUp(lm, 4);
+
+  const thumbTip  = lm[4];
+  const indexTip  = lm[8];
+  const middleTip = lm[12];
+  const ringTip   = lm[16];
+  const pinkyTip  = lm[20];
+
+  const d_ti  = dist(thumbTip, indexTip);
+  const d_tm  = dist(thumbTip, middleTip);
+  const d_tr  = dist(thumbTip, ringTip);
+  const d_tp  = dist(thumbTip, pinkyTip);
+  const d_im  = dist(indexTip, middleTip);
+  const d_mr  = dist(middleTip, ringTip);
+  const d_ip  = dist(indexTip, pinkyTip);
+
+  // ISL-A: Closed fist, thumb resting on side of index finger (no thumb up)
+  if (!indexUp && !middleUp && !ringUp && !pinkyUp && !thumbUp)
+    scores['A'] += 7;
+
+  // ISL-B: All four fingers extended upward together, thumb tucked in
+  if (indexUp && middleUp && ringUp && pinkyUp && !thumbUp && d_im < 0.06)
+    scores['B'] += 9;
+
+  // ISL-C: Hand curved in C-shape — all fingers semi-curled, thumb out
+  if (!indexUp && !middleUp && !ringUp && !pinkyUp && thumbUp) {
+    const gap = dist(thumbTip, pinkyTip);
+    if (gap > 0.12 && gap < 0.35) scores['C'] += 8;
+  }
+
+  // ISL-D: Index finger pointing up, other fingers curled, thumb touching middle
+  if (indexUp && !middleUp && !ringUp && !pinkyUp && d_tm < 0.07)
+    scores['D'] += 8;
+
+  // ISL-E: All fingers bent/curled toward palm, thumb tucked under
+  if (!indexUp && !middleUp && !ringUp && !pinkyUp) {
+    if (lm[8].y > lm[5].y && lm[12].y > lm[9].y && lm[4].y > lm[3].y)
+      scores['E'] += 7;
+  }
+
+  // ISL-F: Index & thumb touching forming a circle, other fingers up
+  if (!indexUp && middleUp && ringUp && pinkyUp && d_ti < 0.06)
+    scores['F'] += 9;
+
+  // ISL-G: Index pointing sideways (horizontal), thumb parallel, rest curled
+  if (indexUp && !middleUp && !ringUp && !pinkyUp) {
+    const horiz = Math.abs(lm[8].x - lm[6].x) > Math.abs(lm[8].y - lm[6].y);
+    if (horiz) scores['G'] += 8;
+  }
+
+  // ISL-H: Index and middle fingers extended horizontally side by side
+  if (indexUp && middleUp && !ringUp && !pinkyUp) {
+    const horiz = Math.abs(lm[8].x - lm[6].x) > 0.04;
+    if (horiz && d_im < 0.06) scores['H'] += 8;
+  }
+
+  // ISL-I: Pinky finger extended upward only
+  if (!indexUp && !middleUp && !ringUp && pinkyUp && !thumbUp)
+    scores['I'] += 9;
+
+  // ISL-J: Pinky extended + thumb out (hook/curve gesture — static component)
+  if (!indexUp && !middleUp && !ringUp && pinkyUp && thumbUp)
+    scores['J'] += 7;
+
+  // ISL-K: Index + middle spread in V, thumb out sideways
+  if (indexUp && middleUp && !ringUp && !pinkyUp && thumbUp && d_im > 0.07)
+    scores['K'] += 8;
+
+  // ISL-L: Index pointing up, thumb out horizontally (L-shape)
+  if (indexUp && !middleUp && !ringUp && !pinkyUp && thumbUp) {
+    const thumbHoriz = Math.abs(lm[4].x - lm[3].x) > 0.05;
+    if (thumbHoriz) scores['L'] += 9;
+  }
+
+  // ISL-M: Three fingers (index, middle, ring) folded over thumb; pinky folded
+  if (!indexUp && !middleUp && !ringUp && !pinkyUp) {
+    if (lm[8].y > lm[4].y && lm[12].y > lm[4].y && lm[16].y > lm[4].y)
+      scores['M'] += 7;
+  }
+
+  // ISL-N: Index + middle folded over thumb, ring + pinky folded
+  if (!indexUp && !middleUp && !ringUp && !pinkyUp) {
+    if (lm[8].y > lm[4].y && lm[12].y > lm[4].y && lm[16].y < lm[14].y)
+      scores['N'] += 6;
+  }
+
+  // ISL-O: All fingertips meet thumb tip forming an oval/O shape
+  if (!indexUp && !middleUp && !ringUp && !pinkyUp) {
+    const allClose = d_ti < 0.09 && d_tm < 0.10 && d_tr < 0.12;
+    if (allClose) scores['O'] += 8;
+  }
+
+  // ISL-P: Index pointing downward, thumb extended, middle touches thumb
+  if (indexUp && !middleUp && !ringUp && !pinkyUp) {
+    const pointDown = lm[8].y > lm[5].y + 0.04;
+    if (pointDown && thumbUp) scores['P'] += 7;
+  }
+
+  // ISL-Q: Index + thumb pinched downward (like pointing down with pinch)
+  if (!indexUp && !middleUp && !ringUp && !pinkyUp) {
+    const pinchDown = d_ti < 0.07 && lm[8].y > lm[5].y;
+    if (pinchDown) scores['Q'] += 6;
+  }
+
+  // ISL-R: Index + middle crossed (index over middle), ring + pinky folded
+  if (indexUp && middleUp && !ringUp && !pinkyUp && !thumbUp) {
+    const crossed = lm[8].x < lm[12].x + 0.02 && d_im < 0.05;
+    if (crossed) scores['R'] += 8;
+  }
+
+  // ISL-S: Fist with thumb tucked INSIDE under fingers (full closed fist + thumb visible front)
+  if (!indexUp && !middleUp && !ringUp && !pinkyUp && !thumbUp) {
+    if (lm[4].x < lm[8].x) scores['S'] += 6;
+  }
+
+  // ISL-T: Thumb inserted between index and middle finger (thumb tip between lm5 and lm9)
+  if (!indexUp && !middleUp && !ringUp && !pinkyUp) {
+    const thumbBetween = lm[4].y < lm[8].y && lm[4].x > lm[5].x - 0.04 && lm[4].x < lm[9].x + 0.04;
+    if (thumbBetween) scores['T'] += 6;
+  }
+
+  // ISL-U: Index + middle extended together (close), ring + pinky folded
+  if (indexUp && middleUp && !ringUp && !pinkyUp && !thumbUp && d_im < 0.05)
+    scores['U'] += 8;
+
+  // ISL-V: Index + middle spread apart (V-shape / victory sign)
+  if (indexUp && middleUp && !ringUp && !pinkyUp && !thumbUp && d_im > 0.07)
+    scores['V'] += 9;
+
+  // ISL-W: Index, middle, ring all up and spread, pinky down
+  if (indexUp && middleUp && ringUp && !pinkyUp && !thumbUp)
+    scores['W'] += 9;
+
+  // ISL-X: Index finger hooked/crooked (bent at first joint, not fully up)
+  if (!indexUp && !middleUp && !ringUp && !pinkyUp) {
+    const hooked = lm[8].y > lm[6].y && lm[8].y < lm[5].y + 0.02;
+    if (hooked) scores['X'] += 7;
+  }
+
+  // ISL-Y: Thumb + pinky extended (ILY / shaka shape)
+  if (!indexUp && !middleUp && !ringUp && pinkyUp && thumbUp)
+    scores['Y'] += 9;
+
+  // ISL-Z: Index pointing out and slightly up, tracing Z — static: index out, others curled
+  if (indexUp && !middleUp && !ringUp && !pinkyUp && !thumbUp) {
+    const pointOut = lm[8].y < lm[5].y;
+    if (pointOut) scores['Z'] += 6;
+  }
+
+  const sorted = Object.entries(scores).sort((a,b)=>b[1]-a[1]).filter(([,v])=>v>0);
+  const topScore = sorted[0]?.[1] || 0;
+  return sorted.slice(0,5).map(([letter, score]) => ({
+    letter,
+    confidence: Math.min(0.99, score / (topScore + 2))
+  }));
+}
+
+// ==========================================
+// APP STATE
+// ==========================================
+let handsModel = null;
+let stream = null;
+let isRunning = false;
+let faceApiLoaded = false;
+let detectionBuffer = [];
+let wordBuilt = '';
+let lastAddedLetter = null;
+let sameLetterCount = 0;
+let frameCount = 0;
+let lastFpsTime = performance.now();
+let lastEmotionUpdate = 0;
+let currentEmotion = null;
+
+// ==========================================
+// INIT — load both models
+// ==========================================
+async function init() {
+  setDot('loading');
+  setStatus('Loading models...');
+
+  // Step 1: MediaPipe Hands
+  setLoadMsg('Loading hand tracking model...', 15);
+  document.getElementById('mod-hands').className = 'load-module-dot loading';
+
+  handsModel = new Hands({
+    locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+  });
+  handsModel.setOptions({
+    maxNumHands: 1,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.7,
+    minTrackingConfidence: 0.7
+  });
+  handsModel.onResults(onHandResults);
+  await handsModel.initialize();
+
+  document.getElementById('mod-hands').className = 'load-module-dot done';
+  setLoadMsg('Loading face detection model...', 45);
+  document.getElementById('mod-face').className = 'load-module-dot loading';
+
+  // Step 2: face-api models from CDN
+  const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model';
+  try {
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+      faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
+    ]);
+    faceApiLoaded = true;
+    document.getElementById('mod-face').className = 'load-module-dot done';
+    document.getElementById('mod-emotion').className = 'load-module-dot done';
+    setLoadMsg('All models ready!', 100);
+  } catch(e) {
+    console.warn('face-api CDN 1 failed, trying fallback...', e);
+    try {
+      const MODEL_URL2 = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL2),
+        faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL2),
+      ]);
+      faceApiLoaded = true;
+      document.getElementById('mod-face').className = 'load-module-dot done';
+      document.getElementById('mod-emotion').className = 'load-module-dot done';
+      setLoadMsg('All models ready!', 100);
+    } catch(e2) {
+      console.error('face-api failed to load:', e2);
+      document.getElementById('mod-face').className = 'load-module-dot';
+      document.getElementById('mod-emotion').className = 'load-module-dot';
+      setLoadMsg('Emotion model unavailable (hand detection still works)', 100);
+    }
+  }
+
+  setTimeout(() => {
+    document.getElementById('load-overlay').classList.add('hidden');
+    setStatus('Ready');
+    setDot('');
+  }, 700);
+}
+
+function setLoadMsg(msg, pct) {
+  document.getElementById('load-msg').textContent = msg;
+  document.getElementById('prog').style.width = pct + '%';
+}
+
+// ==========================================
+// CAMERA
+// ==========================================
+async function startCamera() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480, facingMode: 'user' }
+    });
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    video.srcObject = stream;
+    video.style.display = 'block';
+    canvas.style.display = 'block';
+    document.getElementById('placeholder').style.display = 'none';
+    document.getElementById('start-btn').style.display = 'none';
+    document.getElementById('stop-btn').style.display = 'inline-flex';
+    document.getElementById('det-overlay').style.display = 'flex';
+    document.getElementById('combined-badge').style.display = 'flex';
+    document.getElementById('scan-line').classList.add('active');
+    isRunning = true;
+    setDot('active');
+    setStatus('Detecting');
+    video.onloadedmetadata = () => {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      processFrame();
+    };
+  } catch(e) {
+    alert('Camera access denied. Please allow camera permission and try again.');
+  }
+}
+
+function stopCamera() {
+  isRunning = false;
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  const video = document.getElementById('video');
+  video.srcObject = null;
+  video.style.display = 'none';
+  document.getElementById('canvas').style.display = 'none';
+  document.getElementById('placeholder').style.display = 'flex';
+  document.getElementById('start-btn').style.display = 'inline-flex';
+  document.getElementById('stop-btn').style.display = 'none';
+  document.getElementById('det-overlay').style.display = 'none';
+  document.getElementById('combined-badge').style.display = 'none';
+  document.getElementById('scan-line').classList.remove('active');
+  document.getElementById('no-hand').classList.remove('show');
+  setDot('');
+  setStatus('Stopped');
+  updateSignDisplay(null);
+  resetEmotionDisplay();
+}
+
+let faceDetectEvery = 0;
+async function processFrame() {
+  if (!isRunning) return;
+  const video = document.getElementById('video');
+  if (video.readyState >= 2) {
+    await handsModel.send({ image: video });
+    // Run face emotion every 4 frames (for performance)
+    faceDetectEvery++;
+    if (faceApiLoaded && faceDetectEvery % 4 === 0) {
+      detectEmotion(video);
+    }
+  }
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFpsTime >= 1000) {
+    document.getElementById('fps-badge').textContent = frameCount + ' fps';
+    frameCount = 0; lastFpsTime = now;
+  }
+  requestAnimationFrame(processFrame);
+}
+
+// ==========================================
+// HAND RESULTS
+// ==========================================
+function onHandResults(results) {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const lm = results.multiHandLandmarks?.[0];
+
+  if (!lm) {
+    document.getElementById('no-hand').classList.add('show');
+    document.getElementById('hand-mode-dot').style.background = 'var(--text3)';
+    updateSignDisplay(null);
+    detectionBuffer = [];
+    return;
+  }
+
+  document.getElementById('no-hand').classList.remove('show');
+  document.getElementById('hand-mode-dot').style.background = 'var(--accent)';
+
+  drawConnectors(ctx, lm, HAND_CONNECTIONS, { color: 'rgba(0,229,255,0.45)', lineWidth: 2 });
+  drawLandmarks(ctx, lm, {
+    color: '#00e5ff', lineWidth: 1,
+    radius: d => FINGER_TIPS.includes(d.index) ? 5 : 2
+  });
+
+  const preds = classifyISL(lm);
+  const top = preds[0];
+  if (!top) return;
+
+  detectionBuffer.push(top.letter);
+  if (detectionBuffer.length > 8) detectionBuffer.shift();
+
+  const freq = {};
+  detectionBuffer.forEach(l => freq[l] = (freq[l]||0)+1);
+  const stable = Object.entries(freq).sort((a,b)=>b[1]-a[1])[0];
+  const stableLetter = stable[0];
+  const stability = stable[1] / detectionBuffer.length;
+
+  if (stability > 0.6) {
+    updateSignDisplay(stableLetter, top.confidence, preds);
+    if (stableLetter === lastAddedLetter) {
+      sameLetterCount++;
+      if (sameLetterCount === 18) addLetterToWord(stableLetter);
+    } else {
+      lastAddedLetter = stableLetter;
+      sameLetterCount = 0;
+    }
+    const hand = results.multiHandedness?.[0]?.label || 'Right';
+    document.getElementById('hand-side').textContent = hand + ' Hand';
+  }
+
+  document.getElementById('ov-letter').textContent = stableLetter;
+  document.getElementById('ov-name').textContent = getLetterName(stableLetter);
+  const pct = Math.round(top.confidence * 100);
+  document.getElementById('ov-conf-fill').style.width = pct + '%';
+  document.getElementById('ov-conf-pct').textContent = pct + '%';
+}
+
+// ==========================================
+// EMOTION DETECTION (face-api.js)
+// ==========================================
+async function detectEmotion(video) {
+  try {
+    const detection = await faceapi
+      .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 }))
+      .withFaceExpressions();
+
+    if (!detection) {
+      document.getElementById('face-mode-dot').style.background = 'var(--text3)';
+      document.getElementById('face-det-status').textContent = 'No face';
+      resetEmotionDisplay();
+      return;
+    }
+
+    document.getElementById('face-mode-dot').style.background = '#a78bfa';
+    document.getElementById('face-det-status').textContent = 'Face detected';
+
+    const expressions = detection.expressions;
+    updateEmotionDisplay(expressions);
+
+  } catch(e) {
+    // silent fail
+  }
+}
+
+function updateEmotionDisplay(expressions) {
+  // Find dominant emotion
+  const sorted = Object.entries(expressions).sort((a,b)=>b[1]-a[1]);
+  const [topEmo, topConf] = sorted[0];
+  const cfg = EMOTION_CONFIG[topEmo] || EMOTION_CONFIG.neutral;
+
+  // Update face circle
+  const face = document.getElementById('emotion-face');
+  face.textContent = cfg.emoji;
+  face.className = 'emotion-face detected';
+  face.style.setProperty('--current-emotion-color', cfg.color);
+  face.style.setProperty('--current-emotion-bg', cfg.bg);
+  face.style.setProperty('--current-emotion-glow', cfg.glow);
+  face.style.borderColor = cfg.color;
+  face.style.background = cfg.bg;
+  face.style.boxShadow = `0 0 20px ${cfg.glow}`;
+
+  // Label
+  const label = document.getElementById('emotion-label');
+  label.textContent = topEmo;
+  label.className = 'emotion-label';
+  label.style.color = cfg.color;
+
+  // Desc
+  document.getElementById('emotion-desc').textContent = cfg.desc;
+
+  // Update bars
+  EMOTIONS.forEach(emo => {
+    const val = expressions[emo] || 0;
+    const pct = Math.round(val * 100);
+    const fill = document.getElementById('emo-fill-' + emo);
+    const pctEl = document.getElementById('emo-pct-' + emo);
+    if (fill) fill.style.width = pct + '%';
+    if (pctEl) pctEl.textContent = pct + '%';
+  });
+
+  // Update video badge
+  document.getElementById('ov-emo-emoji').textContent = cfg.emoji;
+  document.getElementById('ov-emo-name').textContent = topEmo;
+  document.getElementById('ov-emo-conf').textContent = Math.round(topConf * 100) + '% conf';
+  document.getElementById('emo-badge-video').style.borderColor = cfg.color;
+
+  currentEmotion = topEmo;
+}
+
+function resetEmotionDisplay() {
+  const face = document.getElementById('emotion-face');
+  face.textContent = '😐';
+  face.className = 'emotion-face';
+  face.style.borderColor = '';
+  face.style.background = '';
+  face.style.boxShadow = '';
+
+  const label = document.getElementById('emotion-label');
+  label.textContent = 'No face detected';
+  label.className = 'emotion-label none';
+  label.style.color = '';
+
+  document.getElementById('emotion-desc').textContent = 'Face the camera to detect your emotion in real-time.';
+  document.getElementById('ov-emo-emoji').textContent = '😐';
+  document.getElementById('ov-emo-name').textContent = 'neutral';
+  document.getElementById('ov-emo-conf').textContent = '—';
+  document.getElementById('emo-badge-video').style.borderColor = '';
+
+  EMOTIONS.forEach(emo => {
+    const fill = document.getElementById('emo-fill-' + emo);
+    const pctEl = document.getElementById('emo-pct-' + emo);
+    if (fill) fill.style.width = '0%';
+    if (pctEl) pctEl.textContent = '0%';
+  });
+  currentEmotion = null;
+}
+
+// ==========================================
+// SIGN DISPLAY
+// ==========================================
+function updateSignDisplay(letter, conf, preds) {
+  const mainLetter = document.getElementById('main-letter');
+  if (!letter) {
+    mainLetter.textContent = '—'; mainLetter.className = 'big-letter none';
+    document.getElementById('top-preds').innerHTML =
+      '<div style="color:var(--text3);font-size:12px;text-align:center;padding:6px 0;">No hand detected</div>';
+    LETTERS.forEach(l => document.getElementById('ref-'+l)?.classList.remove('detected'));
+    return;
+  }
+  mainLetter.textContent = letter; mainLetter.className = 'big-letter';
+  LETTERS.forEach(l => {
+    const el = document.getElementById('ref-'+l);
+    if (el) el.classList.toggle('detected', l === letter);
+  });
+  if (preds) {
+    const container = document.getElementById('top-preds');
+    container.innerHTML = '';
+    preds.slice(0,4).forEach((p, i) => {
+      const pct = Math.round(p.confidence * 100);
+      const colors = ['#00e5ff', '#7c3aed', '#6b7280', '#374151'];
+      const row = document.createElement('div');
+      row.className = 'conf-row';
+      row.innerHTML = `
+        <span class="conf-ltr" style="color:${colors[i]}">${p.letter}</span>
+        <div class="conf-track"><div class="conf-track-fill" style="width:${pct}%;background:${colors[i]}"></div></div>
+        <span class="conf-val">${pct}%</span>`;
+      container.appendChild(row);
+    });
+  }
+}
+
+function addLetterToWord(letter) {
+  wordBuilt += letter;
+  document.getElementById('word-built').textContent = wordBuilt;
+  addToHistory(letter);
+  sameLetterCount = 0;
+}
+
+function addToHistory(letter) {
+  document.querySelectorAll('.hist-chip.latest').forEach(el => el.classList.remove('latest'));
+  const chip = document.createElement('div');
+  chip.className = 'hist-chip latest';
+  chip.textContent = letter;
+  const container = document.getElementById('history');
+  if (container.querySelector('div[style]')) container.innerHTML = '';
+  container.appendChild(chip);
+  const chips = container.querySelectorAll('.hist-chip');
+  if (chips.length > 30) chips[0].remove();
+}
+
+function addSpace() { wordBuilt += ' '; document.getElementById('word-built').textContent = wordBuilt; }
+function deleteLast() { wordBuilt = wordBuilt.slice(0,-1); document.getElementById('word-built').textContent = wordBuilt; }
+function clearWord() { wordBuilt = ''; document.getElementById('word-built').textContent = ''; }
+function clearHistory() { document.getElementById('history').innerHTML = '<div style="color:var(--text3);font-size:12px;">Signs appear here...</div>'; }
+
+function getLetterName(l) {
+  const n = {A:'Alpha',B:'Bravo',C:'Charlie',D:'Delta',E:'Echo',F:'Foxtrot',G:'Golf',
+    H:'Hotel',I:'India',J:'Juliet',K:'Kilo',L:'Lima',M:'Mike',N:'November',
+    O:'Oscar',P:'Papa',Q:'Quebec',R:'Romeo',S:'Sierra',T:'Tango',
+    U:'Uniform',V:'Victor',W:'Whiskey',X:'X-ray',Y:'Yankee',Z:'Zulu'};
+  return n[l] || l;
+}
+
+function setStatus(text) { document.getElementById('status-txt').textContent = text; }
+function setDot(type) {
+  const dot = document.getElementById('status-dot');
+  dot.className = 'dot' + (type ? ' ' + type : '');
+}
+
+// ==========================================
+// START
+// ==========================================
+init().catch(e => {
+  console.error('Init failed:', e);
+  setLoadMsg('Init failed — please refresh', 100);
+});
+</script>
+</body>
+</html>
